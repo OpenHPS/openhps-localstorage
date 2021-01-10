@@ -49,8 +49,6 @@ pipeline {
     }
     post {
         always {
-            junit 'artifacts/test/xunit.xml'
-            cobertura coberturaReportFile: 'artifacts/coverage/cobertura-coverage.xml'
             publishHTML (target: [
                 allowMissing: false,
                 alwaysLinkToLastBuild: true,
