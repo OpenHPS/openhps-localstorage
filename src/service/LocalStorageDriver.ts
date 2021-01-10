@@ -1,15 +1,15 @@
-import { DataSerializer, DataServiceDriver, FilterQuery } from "@openhps/core";
+import { DataSerializer, DataServiceDriver, FilterQuery } from '@openhps/core';
 import { compress, decompress } from 'lz-string';
 
 export class LocalStorageDriver<I, T> extends DataServiceDriver<I, T> {
     public namespace: string;
     protected _indexKeys: string[] = [];
 
-    constructor(dataType: new () => T, namespace: string = "default") {
+    constructor(dataType: new () => T, namespace = 'default') {
         super((dataType as unknown) as new () => T);
         this.namespace = `${namespace}.${dataType.name}`.toLowerCase();
 
-        if (typeof localStorage === "undefined" || localStorage === null) {
+        if (typeof localStorage === 'undefined' || localStorage === null) {
             // eslint-disable-next-line
             var LocalStorage = require('node-localstorage').LocalStorage;
             global.localStorage = new LocalStorage(namespace);
@@ -24,17 +24,17 @@ export class LocalStorageDriver<I, T> extends DataServiceDriver<I, T> {
     }
 
     private _createIndexes(id: I, object: T): void {
-        this._indexKeys.forEach(key => {
+        this._indexKeys.forEach((key) => {
             localStorage.setItem(`${this.namespace}.${key}[]`, null);
         });
     }
 
     private _deleteIndexes(id: I): void {
-        this._indexKeys.forEach(key => {
+        this._indexKeys.forEach((key) => {
             const values = localStorage.getItem(`${this.namespace}.${key}`);
         });
     }
-    
+
     public findByUID(id: I): Promise<T> {
         return new Promise((resolve) => {
             const compressedStr = localStorage.getItem(`${this.namespace}.uid.${id}`);
@@ -53,9 +53,9 @@ export class LocalStorageDriver<I, T> extends DataServiceDriver<I, T> {
     public findAll(query?: FilterQuery<T>): Promise<T[]> {
         return new Promise<T[]>((resolve, reject) => {
             const items: I[] = JSON.parse(localStorage.getItem(`${this.namespace}_keys`)) || [];
-            Promise.all(items.map(item => this.findByUID(item)))
-                .then(items => {
-                    resolve(items)
+            Promise.all(items.map((item) => this.findByUID(item)))
+                .then((items) => {
+                    resolve(items);
                 })
                 .catch(reject);
         });
@@ -82,9 +82,9 @@ export class LocalStorageDriver<I, T> extends DataServiceDriver<I, T> {
     public deleteAll(): Promise<void> {
         return new Promise<void>((resolve, reject) => {
             const items: I[] = JSON.parse(localStorage.getItem(`${this.namespace}_keys`)) || [];
-            Promise.all(items.map(item => this.delete(item)))
+            Promise.all(items.map((item) => this.delete(item)))
                 .then(() => {
-                    resolve()
+                    resolve();
                 })
                 .catch(reject);
         });
