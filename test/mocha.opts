@@ -1,0 +1,6 @@
+--require reflect-metadata
+--require test/tsconfig.js
+--require source-map-support/register
+--recursive
+
+test/specs/**/*.spec.ts
