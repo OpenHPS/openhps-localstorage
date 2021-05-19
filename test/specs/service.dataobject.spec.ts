@@ -1,391 +1,553 @@
-import { Model, ModelBuilder, DataFrame, LoggingSinkNode, DataObject, DataObjectService, Absolute2DPosition, Absolute3DPosition, CallbackSourceNode } from '@openhps/core';
-import { DummyDataObject } from '../mock/object/DummyDataObject';
+import {
+    LoggingSinkNode,
+    CallbackSinkNode,
+    Model,
+    ModelBuilder,
+    DataFrame,
+    DataObjectService,
+    DataObject,
+    Absolute2DPosition,
+    Absolute3DPosition,
+    CallbackNode,
+    CallbackSourceNode,
+} from '@openhps/core';
 import { DummySensorObject } from '../mock/object/DummySensorObject';
-import { LocalStorageDriver } from '../../src';
-
 import { expect } from 'chai';
 import 'mocha';
+import { LocalStorageDriver } from '../../src';
 
 describe('LocalStorageDriver', () => {
     describe('without compression', () => {
-        var objectDataService: DataObjectService<DataObject>;
+        let objectDataService: DataObjectService<DataObject>;
 
-        before((done) => {
+        before(async () => {
             objectDataService = new DataObjectService(new LocalStorageDriver(DataObject, {
-                compress: false
+                compress: true
             }));
+            await objectDataService.deleteAll();
+            const object1 = new DataObject();
+            object1.setPosition(new Absolute2DPosition(5, 6));
+            object1.displayName = 'Test';
+            object1.createdTimestamp = Date.parse('10 Mar 1995 00:00:00 GMT');
     
-            objectDataService.emitAsync("build").then(() => {
-                objectDataService.deleteAll().then(_ => {
-                    var object1 = new DataObject();
-                    object1.setPosition(new Absolute2DPosition(5, 6));
-                    object1.displayName = "Test";
+            const object2 = new DataObject();
+            object2.setPosition(new Absolute3DPosition(5, 6, 2));
+            object2.displayName = 'Test';
+            object2.parentUID = object1.uid;
+            object2.createdTimestamp = Date.parse('10 Mar 1995 01:00:00 GMT');
+    
+            const object3 = new DataObject();
+            object3.setPosition(new Absolute3DPosition(1, 1, 2));
+            object3.displayName = 'Maxim';
+            object3.createdTimestamp = Date.parse('10 Mar 1995 02:00:00 GMT');
+    
+            await objectDataService.insert(object1.uid, object1);
+            await objectDataService.insert(object2.uid, object2);
+            await objectDataService.insert(object3.uid, object3);
+        });
         
-                    var object2 = new DataObject();
-                    object2.setPosition(new Absolute3DPosition(5, 6, 2));
-                    object2.displayName = "Test";
-        
-                    const insertPromises = new Array();
-                    insertPromises.push(objectDataService.insert(object1.uid, object1));
-                    insertPromises.push(objectDataService.insert(object2.uid, object2));
-                    
-                    Promise.all(insertPromises).then(() => {
-                        done();
-                    }).catch(ex => {
-                        done(ex);
-                    });
+        it('should support sorting in descending order', (done) => {
+            objectDataService
+                .findAll({}, {
+                    sort: [['createdTimestamp', -1]]
+                })
+                .then((objects) => {
+                    expect(objects.length).to.equal(3);
+                    expect(objects[0].createdTimestamp).to.equal(794800800000);
+                    expect(objects[objects.length - 1].createdTimestamp).to.equal(794793600000);
+                    done();
+                })
+                .catch((ex) => {
+                    done(ex);
+            });
+        });
+    
+        it('should support sorting in ascending order', (done) => {
+            objectDataService
+                .findAll({}, {
+                    sort: [['createdTimestamp', 1]]
+                })
+                .then((objects) => {
+                    expect(objects.length).to.equal(3);
+                    expect(objects[0].createdTimestamp).to.equal(794793600000);
+                    expect(objects[objects.length - 1].createdTimestamp).to.equal(794800800000);
+                    done();
+                })
+                .catch((ex) => {
+                    done(ex);
+            });
+        });
+    
+        it('should find data objects before a certain date', (done) => {
+            objectDataService
+                .findBefore(Date.parse('10 Mar 1995 01:30:00 GMT'))
+                .then((objects) => {
+                    expect(objects.length).to.equal(2);
+                    done();
+                })
+                .catch((ex) => {
+                    done(ex);
                 });
-            });
         });
     
-        after((done) => {
-            objectDataService.emitAsync("destroy").then(() => {
-                done();
-            });
-        });     
-    
-        it('should find a object by 2d location', (done) => {
-            objectDataService.findByPosition(new Absolute2DPosition(5, 6)).then(objects => {
-                expect(objects[0].getPosition()).to.be.instanceOf(Absolute2DPosition);
-                const location = objects[0].getPosition() as Absolute2DPosition;
-                expect(location.x).to.equal(5);
-                expect(location.y).to.equal(6);
-                expect(objects[0].displayName).to.equal("Test");
-                done();
-            }).catch(ex => {
-                done(ex);
-            });
+        it('should find data objects after a certain date', (done) => {
+            objectDataService
+                .findAfter(Date.parse('10 Mar 1995 01:30:00 GMT'))
+                .then((objects) => {
+                    expect(objects.length).to.equal(1);
+                    done();
+                })
+                .catch((ex) => {
+                    done(ex);
+                });
         });
     
-        it('should find a object by 3d location', (done) => {
-            objectDataService.findByPosition(new Absolute3DPosition(5, 6, 2)).then(objects => {
-                expect(objects[0].getPosition()).to.be.instanceOf(Absolute3DPosition);
-                const location = objects[0].getPosition() as Absolute3DPosition;
-                expect(location.x).to.equal(5);
-                expect(location.y).to.equal(6);
-                expect(location.z).to.equal(2);
-                expect(objects[0].displayName).to.equal("Test");
-                done();
-            }).catch(ex => {
-                done(ex);
-            });
+        it('should find a object by 2d position', (done) => {
+            objectDataService
+                .findByPosition(new Absolute2DPosition(5, 6))
+                .then((objects) => {
+                    expect(objects[0].getPosition()).to.be.instanceOf(Absolute2DPosition);
+                    const location = objects[0].getPosition() as Absolute2DPosition;
+                    expect(location.x).to.equal(5);
+                    expect(location.y).to.equal(6);
+                    expect(objects[0].displayName).to.equal('Test');
+                    done();
+                })
+                .catch((ex) => {
+                    done(ex);
+                });
         });
-        
+    
+        it('should find a object by 3d position', (done) => {
+            objectDataService
+                .findByPosition(new Absolute3DPosition(5, 6, 2))
+                .then((objects) => {
+                    expect(objects[0].getPosition()).to.be.instanceOf(Absolute3DPosition);
+                    const location = objects[0].getPosition() as Absolute3DPosition;
+                    expect(location.x).to.equal(5);
+                    expect(location.y).to.equal(6);
+                    expect(location.z).to.equal(2);
+                    expect(objects[0].displayName).to.equal('Test');
+                    done();
+                })
+                .catch((ex) => {
+                    done(ex);
+                });
+        });
+    
         it('should store objects', (done) => {
-            var object = new DataObject("2");
-            object.displayName = "Test";
-            objectDataService.insert(object.uid, object).then(savedObject => {
-                expect(savedObject.uid).to.equal("2");
-                expect(savedObject.displayName).to.equal("Test");
-                objectDataService.findByUID("2").then(savedObject => {
-                    expect(savedObject.uid).to.equal("2");
-                    expect(savedObject.displayName).to.equal("Test");
+            const object = new DataObject('2');
+            object.displayName = 'Test';
+            objectDataService.insert(object.uid, object).then((savedObject) => {
+                expect(savedObject.uid).to.equal('2');
+                expect(savedObject.displayName).to.equal('Test');
+                objectDataService.findByUID('2').then((savedObject) => {
+                    expect(savedObject.uid).to.equal('2');
+                    expect(savedObject.displayName).to.equal('Test');
                     done();
                 });
             });
         });
     
-        it('should update objects', (done) => {
-            var object = new DataObject("3");
-            object.displayName = "Update 1";
-            objectDataService.insert(object.uid, object).then(savedObject => {
-                expect(savedObject.uid).to.equal("3");
-                expect(savedObject.displayName).to.equal("Update 1");
-                objectDataService.findByUID("3").then(savedObject => {
-                    expect(savedObject.uid).to.equal("3");
-                    expect(savedObject.displayName).to.equal("Update 1");
-                    
-                    object.displayName = "Update 2";
-                    objectDataService.insert(object.uid, object).then(savedObject => {
-                        expect(savedObject.uid).to.equal("3");
-                        expect(savedObject.displayName).to.equal("Update 2");
-                        objectDataService.findByUID("3").then(savedObject => {
-                            expect(savedObject.uid).to.equal("3");
-                            expect(savedObject.displayName).to.equal("Update 2");
-                            done();
-                        });
-                    });
-                });
-            });
-        });
-    
         it('should throw an error when quering non existing objects', (done) => {
-            objectDataService.findByUID("test").then(savedObject => {
-                done(`No error triggered!`);
-            }).catch(ex => {
-                done();
-            });
+            objectDataService
+                .findByUID('test')
+                .then((savedObject) => {
+                    done('It did not throw an error');
+                })
+                .catch((ex) => {
+                    done();
+                });
         });
     
         it('should find all items', () => {
-            objectDataService.findAll().then(objects => {
+            objectDataService.findAll().then((objects) => {
                 expect(objects.length).to.be.gte(1);
+            });
+        });
+    
+        it('should find by display name', () => {
+            objectDataService.findByDisplayName('Test').then((objects) => {
+                expect(objects.length).to.equal(3);
             });
         });
     });
 
     describe('with compression', () => {
-        var objectDataService: DataObjectService<DataObject>;
+        let objectDataService: DataObjectService<DataObject>;
 
-        before((done) => {
+        before(async () => {
             objectDataService = new DataObjectService(new LocalStorageDriver(DataObject, {
                 compress: true
             }));
+            await objectDataService.deleteAll();
+            const object1 = new DataObject();
+            object1.setPosition(new Absolute2DPosition(5, 6));
+            object1.displayName = 'Test';
+            object1.createdTimestamp = Date.parse('10 Mar 1995 00:00:00 GMT');
     
-            objectDataService.emitAsync("build").then(() => {
-                objectDataService.deleteAll().then(_ => {
-                    var object1 = new DataObject();
-                    object1.setPosition(new Absolute2DPosition(5, 6));
-                    object1.displayName = "Test";
-        
-                    var object2 = new DataObject();
-                    object2.setPosition(new Absolute3DPosition(5, 6, 2));
-                    object2.displayName = "Test";
-        
-                    const insertPromises = new Array();
-                    insertPromises.push(objectDataService.insert(object1.uid, object1));
-                    insertPromises.push(objectDataService.insert(object2.uid, object2));
-                    
-                    Promise.all(insertPromises).then(() => {
-                        done();
-                    }).catch(ex => {
-                        done(ex);
-                    });
-                });
-            });
+            const object2 = new DataObject();
+            object2.setPosition(new Absolute3DPosition(5, 6, 2));
+            object2.displayName = 'Test';
+            object2.parentUID = object1.uid;
+            object2.createdTimestamp = Date.parse('10 Mar 1995 01:00:00 GMT');
+    
+            const object3 = new DataObject();
+            object3.setPosition(new Absolute3DPosition(1, 1, 2));
+            object3.displayName = 'Maxim';
+            object3.createdTimestamp = Date.parse('10 Mar 1995 02:00:00 GMT');
+    
+            await objectDataService.insert(object1.uid, object1);
+            await objectDataService.insert(object2.uid, object2);
+            await objectDataService.insert(object3.uid, object3);
         });
     
-        after((done) => {
-            objectDataService.emitAsync("destroy").then(() => {
-                done();
-            });
-        });     
-    
-        it('should find a object by 2d location', (done) => {
-            objectDataService.findByPosition(new Absolute2DPosition(5, 6)).then(objects => {
-                expect(objects[0].getPosition()).to.be.instanceOf(Absolute2DPosition);
-                const location = objects[0].getPosition() as Absolute2DPosition;
-                expect(location.x).to.equal(5);
-                expect(location.y).to.equal(6);
-                expect(objects[0].displayName).to.equal("Test");
-                done();
-            }).catch(ex => {
-                done(ex);
-            });
-        });
-    
-        it('should find a object by 3d location', (done) => {
-            objectDataService.findByPosition(new Absolute3DPosition(5, 6, 2)).then(objects => {
-                expect(objects[0].getPosition()).to.be.instanceOf(Absolute3DPosition);
-                const location = objects[0].getPosition() as Absolute3DPosition;
-                expect(location.x).to.equal(5);
-                expect(location.y).to.equal(6);
-                expect(location.z).to.equal(2);
-                expect(objects[0].displayName).to.equal("Test");
-                done();
-            }).catch(ex => {
-                done(ex);
-            });
-        });
-        
-        it('should store objects', (done) => {
-            var object = new DataObject("2");
-            object.displayName = "Test";
-            objectDataService.insert(object.uid, object).then(savedObject => {
-                expect(savedObject.uid).to.equal("2");
-                expect(savedObject.displayName).to.equal("Test");
-                objectDataService.findByUID("2").then(savedObject => {
-                    expect(savedObject.uid).to.equal("2");
-                    expect(savedObject.displayName).to.equal("Test");
+        it('should support sorting in descending order', (done) => {
+            objectDataService
+                .findAll({}, {
+                    sort: [['createdTimestamp', -1]]
+                })
+                .then((objects) => {
+                    expect(objects.length).to.equal(3);
+                    expect(objects[0].createdTimestamp).to.equal(794800800000);
+                    expect(objects[objects.length - 1].createdTimestamp).to.equal(794793600000);
                     done();
-                });
+                })
+                .catch((ex) => {
+                    done(ex);
             });
         });
     
-        it('should update objects', (done) => {
-            var object = new DataObject("3");
-            object.displayName = "Update 1";
-            objectDataService.insert(object.uid, object).then(savedObject => {
-                expect(savedObject.uid).to.equal("3");
-                expect(savedObject.displayName).to.equal("Update 1");
-                objectDataService.findByUID("3").then(savedObject => {
-                    expect(savedObject.uid).to.equal("3");
-                    expect(savedObject.displayName).to.equal("Update 1");
-                    
-                    object.displayName = "Update 2";
-                    objectDataService.insert(object.uid, object).then(savedObject => {
-                        expect(savedObject.uid).to.equal("3");
-                        expect(savedObject.displayName).to.equal("Update 2");
-                        objectDataService.findByUID("3").then(savedObject => {
-                            expect(savedObject.uid).to.equal("3");
-                            expect(savedObject.displayName).to.equal("Update 2");
-                            done();
-                        });
-                    });
+        it('should support sorting in ascending order', (done) => {
+            objectDataService
+                .findAll({}, {
+                    sort: [['createdTimestamp', 1]]
+                })
+                .then((objects) => {
+                    expect(objects.length).to.equal(3);
+                    expect(objects[0].createdTimestamp).to.equal(794793600000);
+                    expect(objects[objects.length - 1].createdTimestamp).to.equal(794800800000);
+                    done();
+                })
+                .catch((ex) => {
+                    done(ex);
+            });
+        });
+    
+        it('should find data objects before a certain date', (done) => {
+            objectDataService
+                .findBefore(Date.parse('10 Mar 1995 01:30:00 GMT'))
+                .then((objects) => {
+                    expect(objects.length).to.equal(2);
+                    done();
+                })
+                .catch((ex) => {
+                    done(ex);
+                });
+        });
+    
+        it('should find data objects after a certain date', (done) => {
+            objectDataService
+                .findAfter(Date.parse('10 Mar 1995 01:30:00 GMT'))
+                .then((objects) => {
+                    expect(objects.length).to.equal(1);
+                    done();
+                })
+                .catch((ex) => {
+                    done(ex);
+                });
+        });
+    
+        it('should find a object by 2d position', (done) => {
+            objectDataService
+                .findByPosition(new Absolute2DPosition(5, 6))
+                .then((objects) => {
+                    expect(objects[0].getPosition()).to.be.instanceOf(Absolute2DPosition);
+                    const location = objects[0].getPosition() as Absolute2DPosition;
+                    expect(location.x).to.equal(5);
+                    expect(location.y).to.equal(6);
+                    expect(objects[0].displayName).to.equal('Test');
+                    done();
+                })
+                .catch((ex) => {
+                    done(ex);
+                });
+        });
+    
+        it('should find a object by 3d position', (done) => {
+            objectDataService
+                .findByPosition(new Absolute3DPosition(5, 6, 2))
+                .then((objects) => {
+                    expect(objects[0].getPosition()).to.be.instanceOf(Absolute3DPosition);
+                    const location = objects[0].getPosition() as Absolute3DPosition;
+                    expect(location.x).to.equal(5);
+                    expect(location.y).to.equal(6);
+                    expect(location.z).to.equal(2);
+                    expect(objects[0].displayName).to.equal('Test');
+                    done();
+                })
+                .catch((ex) => {
+                    done(ex);
+                });
+        });
+    
+        it('should store objects', (done) => {
+            const object = new DataObject('2');
+            object.displayName = 'Test';
+            objectDataService.insert(object.uid, object).then((savedObject) => {
+                expect(savedObject.uid).to.equal('2');
+                expect(savedObject.displayName).to.equal('Test');
+                objectDataService.findByUID('2').then((savedObject) => {
+                    expect(savedObject.uid).to.equal('2');
+                    expect(savedObject.displayName).to.equal('Test');
+                    done();
                 });
             });
         });
     
         it('should throw an error when quering non existing objects', (done) => {
-            objectDataService.findByUID("test").then(savedObject => {
-                done(`No error triggered!`);
-            }).catch(ex => {
-                done();
-            });
+            objectDataService
+                .findByUID('test')
+                .then((savedObject) => {
+                    done('It did not throw an error');
+                })
+                .catch((ex) => {
+                    done();
+                });
         });
     
         it('should find all items', () => {
-            objectDataService.findAll().then(objects => {
+            objectDataService.findAll().then((objects) => {
                 expect(objects.length).to.be.gte(1);
             });
         });
-    });
     
-    describe('source', () => {
-        var model: Model<DataFrame, DataFrame>;
-        var objectDataService: DataObjectService<DataObject>;
-        
+        it('should find by display name', () => {
+            objectDataService.findByDisplayName('Test').then((objects) => {
+                expect(objects.length).to.equal(3);
+            });
+        });
+    });
+
+    describe('source node', () => {
+        let model: Model<DataFrame, DataFrame>;
+        let objectDataService: DataObjectService<DataObject>;
+
         before((done) => {
-            objectDataService = new DataObjectService(new LocalStorageDriver(DataObject));
             ModelBuilder.create()
-                .addService(objectDataService)
                 .from(new CallbackSourceNode())
                 .to(new LoggingSinkNode())
-                .build().then((m: Model) => {
+                .build()
+                .then((m) => {
                     model = m;
+                    objectDataService = model.findDataService(DataObject);
 
-                    var object = new DummySensorObject("123");
-                    object.displayName = "Hello";
-
-                    objectDataService.deleteAll().then(() => {
-                        objectDataService.insert(object.uid, object).then(savedObject => {
-                            done();
-                        });
+                    const object = new DummySensorObject('123');
+                    object.setPosition(new Absolute2DPosition(3, 2));
+                    object.displayName = 'Hello';
+                    objectDataService.insert(object.uid, object).then((savedObject) => {
+                        done();
                     });
                 });
         });
 
-        after((done) => {
-            model.emitAsync("destroy").then(() => {
+        it('should load unknown objects', (done) => {
+            const object = new DummySensorObject('123');
+            const frame = new DataFrame();
+            frame.addObject(object);
+            model
+                .push(frame)
+                .then((_) => {
+                    // Check if it is stored
+                    objectDataService
+                        .findAll()
+                        .then((objects) => {
+                            expect(objects[0].displayName).to.equal('Hello');
+                            done();
+                        })
+                        .catch((ex) => {
+                            done(ex);
+                        });
+                })
+                .catch((ex) => {
+                    done(ex);
+                });
+        });
+
+        it('should emit events', (done) => {
+            objectDataService.once('deleteAll', () => {
+                done();
+            });
+            Promise.resolve(objectDataService.deleteAll());
+        });
+
+        it('should delete all objects based on a query', (done) => {
+            const promises = [];
+            const object = new DummySensorObject('x');
+            object.setPosition(new Absolute2DPosition(5, 3));
+            object.displayName = 'X';
+            promises.push(objectDataService.insert(object.uid, object));
+            for (let i = 0 ; i <= 10 ; i++){
+                const object = new DummySensorObject('123' + i);
+                object.setPosition(new Absolute2DPosition(5, i));
+                object.displayName = 'Beat';
+                promises.push(objectDataService.insert(object.uid, object));
+            }
+            Promise.all(promises).then(() => {
+                objectDataService.count({
+                    displayName: "Beat"
+                }).then(count1 => {
+                    expect(count1, "Stored objects count is 0").to.not.eq(0);
+                    objectDataService.deleteAll({
+                        displayName: "Beat"
+                    }).then(() => {
+                        return objectDataService.count({
+                            displayName: "Beat"
+                        });
+                    }).then(count2 => {
+                        expect(count2).to.eq(0);
+                        return objectDataService.count();
+                    }).then(count => {
+                        expect(count).to.not.eq(0);
+                        done();
+                    }).catch(done);
+                }).catch(done);
+            }).catch(done);
+        });
+
+        it('should delete all objects', (done) => {
+            objectDataService.deleteAll().then(() => {
                 done();
             });
         });
-
-        it('should load unknown objects', (done) => {
-            var object = new DummySensorObject("123");
-            var frame = new DataFrame();
-            frame.addObject(object);
-
-            model.onceCompleted(frame.uid).then(() => {
-                // Check if it is stored
-                objectDataService.findAll().then(objects => {
-                    expect(objects[0].displayName).to.equal("Hello");
-                    done();
-                }).catch(ex => {
-                    done(ex);
-                });
-            }).catch(done);
-
-            model.push(frame);
-        });
-
     });
 
-    describe('sink', () => {
-        var model: Model<DataFrame, DataFrame>;
-        var objectDataService: DataObjectService<DataObject>;
-        
-        before((done) => {
-            objectDataService = new DataObjectService(new LocalStorageDriver(DataObject));
+    describe('sink node', () => {
+        let model: Model<DataFrame, DataFrame>;
+        let objectDataService: DataObjectService<DataObject>;
 
+        before((done) => {
             ModelBuilder.create()
-                .addService(objectDataService)
                 .from()
                 .to(new LoggingSinkNode())
-                .build().then((m: Model) => {
+                .build()
+                .then((m) => {
                     model = m;
+                    objectDataService = model.findDataService(DataObject);
                     done();
                 });
         });
 
-        after((done) => {
-            model.emitAsync("destroy").then(() => {
-                done();
-            });
-        });
-
-        it('should store objects at the output layer', (done) => {
-            var object = new DataObject("4321");
-            object.displayName = "Test";
-            var frame = new DataFrame();
+        it('should store objects at the sink node', (done) => {
+            const object = new DataObject();
+            object.setPosition(new Absolute2DPosition(1, 2));
+            object.displayName = 'Test';
+            const frame = new DataFrame();
             frame.addObject(object);
-
-            model.onceCompleted(frame.uid).then(() => {
-                // Check if it is stored
-                objectDataService.findByUID("4321").then(object => {
-                    expect(object.displayName).to.equal("Test");
-                    done();
-                }).catch(ex => {
-                    done(ex);
-                });
-            }).catch(done);
-
-            model.push(frame);
-        });
-
-        it('should update objects', (done) => {
-            var object = new DummyDataObject("4");
-            object.displayName = "Sensor Test";
-            object.count = 1;
-
-            var frame = new DataFrame();
-            frame.source = object;
-
-            model.onceCompleted(frame.uid).then(() => {
-                objectDataService.findByUID("4").then((savedObject: DummyDataObject) => {
-                    expect(savedObject.uid).to.equal("4");
-                    expect(savedObject.displayName).to.equal("Sensor Test");
-                    expect(savedObject.count).to.equal(1);
-                   
-                    object.count = 2;
-                    var frame = new DataFrame();
-                    frame.source = object;
-
-                    model.onceCompleted(frame.uid).then(() => {
-                        // Check if it is stored
-                        objectDataService.findByUID("4").then((savedObject: DummyDataObject) => {
-                            expect(savedObject.uid).to.equal("4");
-                            expect(savedObject.displayName).to.equal("Sensor Test");
-                            expect(savedObject.count).to.equal(2);
+            model
+                .push(frame)
+                .then((_) => {
+                    // Check if it is stored
+                    objectDataService
+                        .findAll()
+                        .then((objects) => {
+                            expect(objects[0].displayName).to.equal('Test');
+                            expect(objects[0].getPosition()).to.be.instanceOf(Absolute2DPosition);
+                            expect((objects[0].getPosition() as Absolute2DPosition).y).to.equal(2);
                             done();
+                        })
+                        .catch((ex) => {
+                            done(ex);
                         });
-                    }).catch(done);
-        
-                    model.push(frame);
-                });
-            }).catch(done);
-
-            model.push(frame);
-        });
-
-        it('should store unknown data objects at the output layer', (done) => {
-            var object = new DummySensorObject();
-            object.displayName = "Testabc";
-            var frame = new DataFrame();
-            frame.addObject(object);
-
-            model.onceCompleted(frame.uid).then(() => {
-                // Check if it is stored
-                objectDataService.findAll().then(objects => {
-                    expect(objects[objects.length - 1].displayName).to.equal("Testabc");
-                    done();
-                }).catch(ex => {
+                })
+                .catch((ex) => {
                     done(ex);
                 });
-            }).catch(done);
-
-            model.push(frame);
         });
 
+        it('should store unknown data objects at the sink node', (done) => {
+            const object = new DummySensorObject();
+            object.displayName = 'Testabc';
+            const frame = new DataFrame();
+            frame.addObject(object);
+            model
+                .push(frame)
+                .then((_) => {
+                    // Check if it is stored
+                    objectDataService
+                        .findAll()
+                        .then((objects) => {
+                            expect(objects[1].displayName).to.equal('Testabc');
+                            done();
+                        })
+                        .catch((ex) => {
+                            done(ex);
+                        });
+                })
+                .catch((ex) => {
+                    done(ex);
+                });
+        });
+
+        it('should resolve the promise after stored', async () => {
+            const object = new DataObject();
+            object.setPosition(new Absolute2DPosition(1, 2));
+            object.displayName = 'Test';
+            const frame = new DataFrame();
+            frame.addObject(object);
+            const model: Model = await ModelBuilder.create()
+                .from()
+                .via(new CallbackNode())
+                .to(new CallbackSinkNode())
+                .build();
+            await model.push(frame);
+            const result = await model.findDataService(DataObject).findByUID(object.uid);
+            expect(result.displayName).to.equal('Test');
+        });
+    });
+
+    
+    describe('sink node without persistence', () => {
+        let model: Model<DataFrame, DataFrame>;
+        let objectDataService: DataObjectService<DataObject>;
+
+        before((done) => {
+            ModelBuilder.create()
+                .from()
+                .to(new CallbackSinkNode(() => {}, {
+                    persistence: false
+                }))
+                .build()
+                .then((m) => {
+                    model = m;
+                    objectDataService = model.findDataService(DataObject);
+                    done();
+                });
+        });
+
+        it('should not store objects at the sink node', (done) => {
+            const object = new DataObject();
+            object.setPosition(new Absolute2DPosition(1, 2));
+            object.displayName = 'Test';
+            const frame = new DataFrame();
+            frame.addObject(object);
+            model
+                .push(frame)
+                .then(() => {
+                    // Check if it is stored
+                    objectDataService
+                        .findAll()
+                        .then((objects) => {
+                            expect(objects.length).to.equal(0);
+                            done();
+                        })
+                        .catch((ex) => {
+                            done(ex);
+                        });
+                })
+                .catch((ex) => {
+                    done(ex);
+                });
+        });
     });
 });
