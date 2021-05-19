@@ -77,6 +77,22 @@ describe('LocalStorageDriver', () => {
                     done(ex);
             });
         });
+
+        it('should support sorting strings in ascending order', (done) => {
+            objectDataService
+                .findAll({}, {
+                    sort: [['displayName', 1]]
+                })
+                .then((objects) => {
+                    expect(objects.length).to.equal(3);
+                    expect(objects[0].createdTimestamp).to.equal(794800800000);
+                    expect(objects[objects.length - 1].createdTimestamp).to.equal(794797200000);
+                    done();
+                })
+                .catch((ex) => {
+                    done(ex);
+            });
+        });
     
         it('should find data objects before a certain date', (done) => {
             objectDataService
@@ -335,6 +351,7 @@ describe('LocalStorageDriver', () => {
 
         before((done) => {
             ModelBuilder.create()
+                .addService(new DataObjectService(new LocalStorageDriver(DataObject)))
                 .from(new CallbackSourceNode())
                 .to(new LoggingSinkNode())
                 .build()
@@ -428,12 +445,15 @@ describe('LocalStorageDriver', () => {
 
         before((done) => {
             ModelBuilder.create()
+                .addService(new DataObjectService(new LocalStorageDriver(DataObject)))
                 .from()
                 .to(new LoggingSinkNode())
                 .build()
                 .then((m) => {
                     model = m;
                     objectDataService = model.findDataService(DataObject);
+                    return objectDataService.deleteAll();
+                }).then(() => {
                     done();
                 });
         });
@@ -521,6 +541,8 @@ describe('LocalStorageDriver', () => {
                 .then((m) => {
                     model = m;
                     objectDataService = model.findDataService(DataObject);
+                    return objectDataService.deleteAll();
+                }).then(() => {
                     done();
                 });
         });

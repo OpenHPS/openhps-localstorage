@@ -47,7 +47,7 @@ export class LocalStorageDriver<I, T> extends DataServiceDriver<I, T> {
                 }
                 resolve(count);
             } else {
-                return items.length;
+                resolve(items.length);
             }
         });
     }
@@ -59,17 +59,18 @@ export class LocalStorageDriver<I, T> extends DataServiceDriver<I, T> {
     private _findByUID(id: I): any {
         const compressedStr = localStorage.getItem(`${this.prefix}.${id}`);
         const jsonStr = this.options.compress ? decompressFromUTF16(compressedStr) : compressedStr;
-        if (jsonStr === null) {
+        try {
+            return JSON.parse(jsonStr);
+        } catch (ex) {
             return undefined;
         }
-        return JSON.parse(jsonStr);
     }
 
     public findByUID(id: I): Promise<T> {
         return new Promise((resolve, reject) => {
             const serialized = this._findByUID(id);
             if (serialized) {
-                const obj = DataSerializer.deserialize<T>(this._findByUID(id));
+                const obj = this.deserialize(this._findByUID(id));
                 resolve(obj);
             } else {
                 reject(`${this.dataType.name} with identifier #${id} not found!`);
@@ -137,7 +138,7 @@ export class LocalStorageDriver<I, T> extends DataServiceDriver<I, T> {
 
     public insert(id: I, object: T): Promise<T> {
         return new Promise<T>((resolve) => {
-            const serializedStr = JSON.stringify(DataSerializer.serialize(object));
+            const serializedStr = JSON.stringify(this.serialize(object));
             const compressedStr = this.options.compress ? compressToUTF16(serializedStr) : serializedStr;
             localStorage.setItem(`${this.prefix}.${id}`, compressedStr);
             const items: I[] = this._findAll();
@@ -162,7 +163,7 @@ export class LocalStorageDriver<I, T> extends DataServiceDriver<I, T> {
     public deleteAll(filter?: FilterQuery<T>): Promise<void> {
         return new Promise((resolve, reject) => {
             const items: I[] = this._findAll();
-            if (filter === undefined) {
+            if (!filter) {
                 Promise.all(items.map((item) => this.delete(item)))
                     .then(() => resolve())
                     .catch(reject);
