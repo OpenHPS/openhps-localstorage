@@ -18,15 +18,53 @@
 </p>
 
 <h3 align="center">
-    <a href="https://github.com/OpenHPS/openhps-core">@openhps/core</a> &mdash; <a href="https://openhps.org/docs/csv">API</a>
+    <a href="https://github.com/OpenHPS/openhps-core">@openhps/core</a> &mdash; <a href="https://openhps.org/docs/localstorage">API</a>
 </h3>
 
 <br />
 
+This repository contains the [LocalStorage](https://developer.mozilla.org/en-US/docs/Web/API/Window/localStorage) component for OpenHPS (Open Source Hybrid Positioning System). It includes a data service that can be used to store data frames, objects and node data in a browser local strage.
+
+OpenHPS is a data processing positioning framework. It is designed to support many different use cases ranging from simple positioning such as detecting the position of a pawn on a chessboard using RFID, to indoor positioning methods using multiple cameras.
+
+## Features
+- ```LocalStrageDriver``` that can be used to initialize a ```DataService``` or as a standalone data service.
+
 ## Getting Started
-If you have [npm installed](https://www.npmjs.com/get-npm), start using @openhps/localstorage with the following command.
+If you have [npm installed](https://www.npmjs.com/get-npm), start using @openhps/core with the following command.
 ```bash
 npm install @openhps/localstorage --save
+```
+
+### Usage
+You can use a ```LocalStorageDriver``` in a data service such as a ```DataObjectService``` to
+use the driver to store data objects of a specific type.
+
+```typescript
+import { ModelBuilder, DataObjectService, DataObject, ReferenceSpace } from '@openhps/core';
+import { LocalStorageDriver } from '@openhps/localstorage';
+
+ModelBuilder.create()
+    .addService(new DataObjectService(new LocalStorageDriver(DataObject, {
+        namespace: 'myapp'
+    })))
+    .addService(new DataObjectService(new LocalStorageDriver(ReferenceSpace, {
+        namespace: 'myapp',
+        compress: true // Compress data
+    })))
+    .addShape(/* ... */)
+    .build().then(model => {
+        /* ... */
+    });
+```
+
+#### Driver Options
+```typescript
+{
+    compress: false,        // Compress stored data with an LZ-based compression
+    chunkSize: 10,          // Chunk size for querying
+    namespace: 'default'    // Namespace used for storage
+}
 ```
 
 ## Contributors

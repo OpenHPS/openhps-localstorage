@@ -6,13 +6,15 @@ import { LocalStorageDriver } from '../../src';
 import { expect } from 'chai';
 import 'mocha';
 
-describe('data object', () => {
-    describe('service', () => {
+describe('LocalStorageDriver', () => {
+    describe('without compression', () => {
         var objectDataService: DataObjectService<DataObject>;
 
         before((done) => {
-            objectDataService = new DataObjectService(new LocalStorageDriver(DataObject));
-
+            objectDataService = new DataObjectService(new LocalStorageDriver(DataObject, {
+                compress: false
+            }));
+    
             objectDataService.emitAsync("build").then(() => {
                 objectDataService.deleteAll().then(_ => {
                     var object1 = new DataObject();
@@ -35,13 +37,13 @@ describe('data object', () => {
                 });
             });
         });
-
+    
         after((done) => {
             objectDataService.emitAsync("destroy").then(() => {
                 done();
             });
         });     
-
+    
         it('should find a object by 2d location', (done) => {
             objectDataService.findByPosition(new Absolute2DPosition(5, 6)).then(objects => {
                 expect(objects[0].getPosition()).to.be.instanceOf(Absolute2DPosition);
@@ -54,7 +56,7 @@ describe('data object', () => {
                 done(ex);
             });
         });
-
+    
         it('should find a object by 3d location', (done) => {
             objectDataService.findByPosition(new Absolute3DPosition(5, 6, 2)).then(objects => {
                 expect(objects[0].getPosition()).to.be.instanceOf(Absolute3DPosition);
@@ -82,7 +84,7 @@ describe('data object', () => {
                 });
             });
         });
-
+    
         it('should update objects', (done) => {
             var object = new DataObject("3");
             object.displayName = "Update 1";
@@ -92,7 +94,7 @@ describe('data object', () => {
                 objectDataService.findByUID("3").then(savedObject => {
                     expect(savedObject.uid).to.equal("3");
                     expect(savedObject.displayName).to.equal("Update 1");
-                   
+                    
                     object.displayName = "Update 2";
                     objectDataService.insert(object.uid, object).then(savedObject => {
                         expect(savedObject.uid).to.equal("3");
@@ -106,7 +108,7 @@ describe('data object', () => {
                 });
             });
         });
-
+    
         it('should throw an error when quering non existing objects', (done) => {
             objectDataService.findByUID("test").then(savedObject => {
                 done(`No error triggered!`);
@@ -114,14 +116,131 @@ describe('data object', () => {
                 done();
             });
         });
-
+    
         it('should find all items', () => {
             objectDataService.findAll().then(objects => {
                 expect(objects.length).to.be.gte(1);
             });
         });
-
     });
+
+    describe('with compression', () => {
+        var objectDataService: DataObjectService<DataObject>;
+
+        before((done) => {
+            objectDataService = new DataObjectService(new LocalStorageDriver(DataObject, {
+                compress: true
+            }));
+    
+            objectDataService.emitAsync("build").then(() => {
+                objectDataService.deleteAll().then(_ => {
+                    var object1 = new DataObject();
+                    object1.setPosition(new Absolute2DPosition(5, 6));
+                    object1.displayName = "Test";
+        
+                    var object2 = new DataObject();
+                    object2.setPosition(new Absolute3DPosition(5, 6, 2));
+                    object2.displayName = "Test";
+        
+                    const insertPromises = new Array();
+                    insertPromises.push(objectDataService.insert(object1.uid, object1));
+                    insertPromises.push(objectDataService.insert(object2.uid, object2));
+                    
+                    Promise.all(insertPromises).then(() => {
+                        done();
+                    }).catch(ex => {
+                        done(ex);
+                    });
+                });
+            });
+        });
+    
+        after((done) => {
+            objectDataService.emitAsync("destroy").then(() => {
+                done();
+            });
+        });     
+    
+        it('should find a object by 2d location', (done) => {
+            objectDataService.findByPosition(new Absolute2DPosition(5, 6)).then(objects => {
+                expect(objects[0].getPosition()).to.be.instanceOf(Absolute2DPosition);
+                const location = objects[0].getPosition() as Absolute2DPosition;
+                expect(location.x).to.equal(5);
+                expect(location.y).to.equal(6);
+                expect(objects[0].displayName).to.equal("Test");
+                done();
+            }).catch(ex => {
+                done(ex);
+            });
+        });
+    
+        it('should find a object by 3d location', (done) => {
+            objectDataService.findByPosition(new Absolute3DPosition(5, 6, 2)).then(objects => {
+                expect(objects[0].getPosition()).to.be.instanceOf(Absolute3DPosition);
+                const location = objects[0].getPosition() as Absolute3DPosition;
+                expect(location.x).to.equal(5);
+                expect(location.y).to.equal(6);
+                expect(location.z).to.equal(2);
+                expect(objects[0].displayName).to.equal("Test");
+                done();
+            }).catch(ex => {
+                done(ex);
+            });
+        });
+        
+        it('should store objects', (done) => {
+            var object = new DataObject("2");
+            object.displayName = "Test";
+            objectDataService.insert(object.uid, object).then(savedObject => {
+                expect(savedObject.uid).to.equal("2");
+                expect(savedObject.displayName).to.equal("Test");
+                objectDataService.findByUID("2").then(savedObject => {
+                    expect(savedObject.uid).to.equal("2");
+                    expect(savedObject.displayName).to.equal("Test");
+                    done();
+                });
+            });
+        });
+    
+        it('should update objects', (done) => {
+            var object = new DataObject("3");
+            object.displayName = "Update 1";
+            objectDataService.insert(object.uid, object).then(savedObject => {
+                expect(savedObject.uid).to.equal("3");
+                expect(savedObject.displayName).to.equal("Update 1");
+                objectDataService.findByUID("3").then(savedObject => {
+                    expect(savedObject.uid).to.equal("3");
+                    expect(savedObject.displayName).to.equal("Update 1");
+                    
+                    object.displayName = "Update 2";
+                    objectDataService.insert(object.uid, object).then(savedObject => {
+                        expect(savedObject.uid).to.equal("3");
+                        expect(savedObject.displayName).to.equal("Update 2");
+                        objectDataService.findByUID("3").then(savedObject => {
+                            expect(savedObject.uid).to.equal("3");
+                            expect(savedObject.displayName).to.equal("Update 2");
+                            done();
+                        });
+                    });
+                });
+            });
+        });
+    
+        it('should throw an error when quering non existing objects', (done) => {
+            objectDataService.findByUID("test").then(savedObject => {
+                done(`No error triggered!`);
+            }).catch(ex => {
+                done();
+            });
+        });
+    
+        it('should find all items', () => {
+            objectDataService.findAll().then(objects => {
+                expect(objects.length).to.be.gte(1);
+            });
+        });
+    });
+    
     describe('source', () => {
         var model: Model<DataFrame, DataFrame>;
         var objectDataService: DataObjectService<DataObject>;
