@@ -1,5 +1,4 @@
 const TerserPlugin = require('terser-webpack-plugin');
-const EsmWebpackPlugin = require("@purtuga/esm-webpack-plugin");
 const path = require('path');
 const pkg = require("./package.json");
 
@@ -9,15 +8,30 @@ const PROJECT_NAME = pkg.name.replace("@", "").replace("/", "-");
 const defaultConfig = env => ({
   mode: env.prod ? "production" : "development",
   devtool: 'source-map',
+  resolve: {
+    alias: {
+      typescript: false,
+    },
+    fallback: {
+      path: false,
+      fs: false,
+      os: false,
+      util: false,
+      stream: false,
+      url: false,
+      assert: false,
+      tls: false,
+      net: false
+    }
+  },
   optimization: {
     minimize: env.prod,
     minimizer: [
       new TerserPlugin({
-        cache: true,
         parallel: true,
-        sourceMap: true,
         terserOptions: {
           keep_classnames: true,
+          sourceMap: true,
         }
       })
     ],
@@ -38,17 +52,25 @@ const bundle = (env, module) => ({
   output: {
     path: path.resolve(__dirname, 'dist'),
     filename: `web/${PROJECT_NAME}${module ? ".es" : ""}${env.prod ? ".min" : ""}.js`,
-    library: module ? "LIB" : LIBRARY_NAME,
-    libraryTarget: module ? "var" : "umd",
+    library: module ? undefined : LIBRARY_NAME,
+    libraryTarget: module ? "module" : "umd",
     umdNamedDefine: !module,
-    globalObject: `(typeof self !== 'undefined' ? self : this)`,
+    globalObject: module ? undefined : `(typeof self !== 'undefined' ? self : this)`,
+    environment: { module },
   },
-  externals: ["@openhps/core"],
-  plugins: module ? [new EsmWebpackPlugin()] : [],
+  experiments: {
+    outputModule: module,
+  },
+  externalsType: module ? "module" : undefined,
+  externals: {
+    '@openhps/core': "./" + (module ? "openhps-core.es" : "openhps-core") + (env.prod ? ".min" : "") + ".js"
+  },
+  devtool: 'source-map',
+  plugins: [],
   ...defaultConfig(env)
 });
 
 module.exports = env => [
-  //bundle(env, true),
-  bundle(env, false)
+  bundle(env, true),
+  bundle(env, false),
 ];

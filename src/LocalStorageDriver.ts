@@ -1,28 +1,17 @@
-import { DataSerializer, DataServiceDriver, FilterQuery, MemoryQueryEvaluator, FindOptions } from '@openhps/core';
+import { DataServiceDriver, FilterQuery, MemoryQueryEvaluator, FindOptions } from '@openhps/core';
 import { compressToUTF16, decompressFromUTF16 } from 'lz-string';
 import { LocalStorageOptions } from './LocalStorageOptions';
 
 export class LocalStorageDriver<I, T> extends DataServiceDriver<I, T> {
     protected options: LocalStorageOptions;
     protected _indexKeys: string[] = [];
-    protected serialize: (obj: T) => any;
-    protected deserialize: (obj: any) => T;
     protected prefix: string;
 
-    constructor(
-        dataType?: new () => T,
-        options?: LocalStorageOptions,
-        serializer: (obj: T) => any = (obj) => DataSerializer.serialize(obj),
-        deserializer: (obj: any) => T = (obj) => DataSerializer.deserialize(obj),
-    ) {
-        super(dataType as unknown as new () => T);
-        this.options = options || {};
+    constructor(dataType?: new () => T, options?: LocalStorageOptions) {
+        super(dataType as unknown as new () => T, options);
         this.options.namespace = this.options.namespace || 'default';
         this.options.chunkSize = this.options.chunkSize || 10;
         this.prefix = `${this.options.namespace}.${dataType.name}`.toLowerCase();
-
-        this.serialize = serializer;
-        this.deserialize = deserializer;
 
         if (typeof localStorage === 'undefined' || localStorage === null) {
             // eslint-disable-next-line
@@ -70,7 +59,7 @@ export class LocalStorageDriver<I, T> extends DataServiceDriver<I, T> {
         return new Promise((resolve, reject) => {
             const serialized = this._findByUID(id);
             if (serialized) {
-                const obj = this.deserialize(this._findByUID(id));
+                const obj = this.options.deserialize(this._findByUID(id));
                 resolve(obj);
             } else {
                 reject(`${this.dataType.name} with identifier #${id} not found!`);
@@ -131,14 +120,14 @@ export class LocalStorageDriver<I, T> extends DataServiceDriver<I, T> {
                     )
                     .slice(0, options.limit);
             }
-            data = data.map(this.deserialize);
+            data = data.map(this.options.deserialize);
             resolve(data);
         });
     }
 
     public insert(id: I, object: T): Promise<T> {
         return new Promise<T>((resolve) => {
-            const serializedStr = JSON.stringify(this.serialize(object));
+            const serializedStr = JSON.stringify(this.options.serialize(object));
             const compressedStr = this.options.compress ? compressToUTF16(serializedStr) : serializedStr;
             localStorage.setItem(`${this.prefix}.${id}`, compressedStr);
             const items: I[] = this._findAll();

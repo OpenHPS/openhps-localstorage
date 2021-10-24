@@ -1,4 +1,6 @@
-export interface LocalStorageOptions {
+import { DataServiceOptions } from '@openhps/core';
+
+export interface LocalStorageOptions extends DataServiceOptions {
     /**
      * Namespace
      *
