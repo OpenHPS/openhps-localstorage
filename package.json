@@ -11,30 +11,31 @@
   "publishConfig": {
     "access": "public"
   },
-  "main": "./dist/cjs/index.js",
-  "types": "./dist/cjs/index.d.ts",
-  "module": "./dist/esm/index.js",
+  "main": "./lib/cjs/index.js",
+  "types": "./lib/types/index.d.ts",
+  "module": "./lib/esm/index.js",
   "exports": {
-    "require": "./dist/cjs/index.js",
-    "import": "./dist/esm/index.js"
+    "require": "./lib/cjs/index.js",
+    "import": "./lib/esm/index.js"
   },
-  "unpkg": "dist/web/openhps-localstorage.min.js",
-  "jsdelivr": "dist/web/openhps-localstorage.min.js",
+  "unpkg": "lib/web/openhps-localstorage.min.js",
+  "jsdelivr": "lib/web/openhps-localstorage.min.js",
   "browser": {
     "node-localstorage": false
   },
   "files": [
-    "dist/**/*",
+    "lib/**/*",
     "src/**/*"
   ],
   "scripts": {
     "test": "mocha --config test/.mocharc.json",
     "cover": "nyc mocha --config test/.mocharc.json && nyc report --reporter=cobertura",
     "lint": "eslint src/**",
-    "clean": "shx rm -rf ./dist && shx rm -rf ./docs/out",
-    "build": "npm run clean && npm-run-all --parallel build:esm build:cjs build:typedoc && npm run build:webpack",
-    "build:esm": "tsc --module es2015 --outDir dist/esm",
-    "build:cjs": "tsc --module commonjs  --outDir dist/cjs",
+    "clean": "shx rm -rf ./lib && shx rm -rf ./docs/out",
+    "build": "npm run clean && npm-run-all --parallel build:esm build:cjs build:declaration build:typedoc && npm run build:webpack",
+    "build:declarations": "tsc --declaration --emitDeclarationOnly --outdir lib/types",
+    "build:esm": "tsc --module es2015 --outDir lib/esm",
+    "build:cjs": "tsc --module commonjs  --outDir lib/cjs",
     "build:webpack": "npm-run-all --parallel build:webpack:*",
     "build:webpack:prod": "webpack --env prod --progress --",
     "build:webpack:dev": "webpack --env dev --progress --",

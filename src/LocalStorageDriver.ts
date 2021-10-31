@@ -1,4 +1,4 @@
-import { DataServiceDriver, FilterQuery, MemoryQueryEvaluator, FindOptions } from '@openhps/core';
+import { DataServiceDriver, FilterQuery, MemoryQueryEvaluator, FindOptions, DataSerializer } from '@openhps/core';
 import { compressToUTF16, decompressFromUTF16 } from 'lz-string';
 import { LocalStorageOptions } from './LocalStorageOptions';
 
@@ -11,13 +11,39 @@ export class LocalStorageDriver<I, T> extends DataServiceDriver<I, T> {
         super(dataType as unknown as new () => T, options);
         this.options.namespace = this.options.namespace || 'default';
         this.options.chunkSize = this.options.chunkSize || 10;
-        this.prefix = `${this.options.namespace}.${dataType.name}`.toLowerCase();
+        this.prefix = `${this.options.namespace}.${this.options.prefix || dataType.name}`.toLowerCase();
 
         if (typeof localStorage === 'undefined' || localStorage === null) {
             // eslint-disable-next-line
             var LocalStorage = require('node-localstorage').LocalStorage;
             global.localStorage = new LocalStorage(this.options.namespace);
         }
+
+        this.once('build', this._initializeLocalStorage.bind(this));
+    }
+
+    private _initializeLocalStorage(): Promise<void> {
+        return new Promise((resolve, reject) => {
+            const metaData = DataSerializer.findRootMetaInfo(this.dataType);
+            if (!metaData) {
+                return resolve();
+            }
+            const indexes: Array<Promise<void>> = Array.from(metaData.dataMembers.values())
+                .filter((dataMember: any) => dataMember.index)
+                .map(this.createIndex.bind(this));
+            Promise.all(indexes)
+                .then(() => resolve())
+                .catch(reject);
+        });
+    }
+
+    public createIndex(dataMember: any): Promise<void> {
+        return new Promise((resolve) => {
+            if (dataMember.index) {
+                localStorage.setItem(`${this.prefix}_index_${dataMember.key}`, JSON.stringify([]));
+            }
+            resolve();
+        });
     }
 
     count(filter?: FilterQuery<T>): Promise<number> {
@@ -55,7 +81,7 @@ export class LocalStorageDriver<I, T> extends DataServiceDriver<I, T> {
         }
     }
 
-    public findByUID(id: I): Promise<T> {
+    findByUID(id: I): Promise<T> {
         return new Promise((resolve, reject) => {
             const serialized = this._findByUID(id);
             if (serialized) {
@@ -67,7 +93,7 @@ export class LocalStorageDriver<I, T> extends DataServiceDriver<I, T> {
         });
     }
 
-    public findOne(query?: FilterQuery<T>, options: FindOptions = {}): Promise<T> {
+    findOne(query?: FilterQuery<T>, options: FindOptions = {}): Promise<T> {
         return new Promise<T>((resolve, reject) => {
             this.findAll(query, {
                 limit: 1,
@@ -84,7 +110,7 @@ export class LocalStorageDriver<I, T> extends DataServiceDriver<I, T> {
         });
     }
 
-    public findAll(query?: FilterQuery<T>, options: FindOptions = {}): Promise<T[]> {
+    findAll(query?: FilterQuery<T>, options: FindOptions = {}): Promise<T[]> {
         return new Promise<T[]>((resolve) => {
             const items: I[] = this._findAll();
             options.limit = options.limit || items.length;
@@ -125,7 +151,7 @@ export class LocalStorageDriver<I, T> extends DataServiceDriver<I, T> {
         });
     }
 
-    public insert(id: I, object: T): Promise<T> {
+    insert(id: I, object: T): Promise<T> {
         return new Promise<T>((resolve) => {
             const serializedStr = JSON.stringify(this.options.serialize(object));
             const compressedStr = this.options.compress ? compressToUTF16(serializedStr) : serializedStr;
@@ -139,7 +165,7 @@ export class LocalStorageDriver<I, T> extends DataServiceDriver<I, T> {
         });
     }
 
-    public delete(id: I): Promise<void> {
+    delete(id: I): Promise<void> {
         return new Promise<void>((resolve) => {
             const items: I[] = this._findAll();
             items.splice(items.indexOf(id), 1);
@@ -149,7 +175,7 @@ export class LocalStorageDriver<I, T> extends DataServiceDriver<I, T> {
         });
     }
 
-    public deleteAll(filter?: FilterQuery<T>): Promise<void> {
+    deleteAll(filter?: FilterQuery<T>): Promise<void> {
         return new Promise((resolve, reject) => {
             const items: I[] = this._findAll();
             if (!filter) {

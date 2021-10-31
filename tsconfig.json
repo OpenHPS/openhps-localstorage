@@ -9,7 +9,7 @@
         "preserveConstEnums": true,
         "sourceMap": true,
         "outDir": "./dist/cjs",
-        "declaration": true,
+        "declaration": false,
         "emitDecoratorMetadata": true,
         "experimentalDecorators": true,
     },

@@ -48,9 +48,9 @@ const defaultConfig = env => ({
 
 const bundle = (env, module) => ({
   name: PROJECT_NAME,
-  entry: `./dist/${module ? "esm" : "cjs"}/index.js`,
+  entry: `./lib/${module ? "esm" : "cjs"}/index.js`,
   output: {
-    path: path.resolve(__dirname, 'dist'),
+    path: path.resolve(__dirname, 'lib'),
     filename: `web/${PROJECT_NAME}${module ? ".es" : ""}${env.prod ? ".min" : ""}.js`,
     library: module ? undefined : LIBRARY_NAME,
     libraryTarget: module ? "module" : "umd",

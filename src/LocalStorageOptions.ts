@@ -19,4 +19,10 @@ export interface LocalStorageOptions extends DataServiceOptions {
      * @default false
      */
     compress?: boolean;
+    /**
+     * Prefix to use
+     *
+     * @default dataType.constructor.name
+     */
+    prefix?: string;
 }

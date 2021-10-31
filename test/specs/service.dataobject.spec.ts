@@ -10,6 +10,7 @@ import {
     Absolute3DPosition,
     CallbackNode,
     CallbackSourceNode,
+    KeyValueDataService,
 } from '@openhps/core';
 import { DummySensorObject } from '../mock/object/DummySensorObject';
 import { expect } from 'chai';
@@ -17,6 +18,35 @@ import 'mocha';
 import { LocalStorageDriver } from '../../src';
 
 describe('LocalStorageDriver', () => {
+
+    describe('key value storage', () => {
+        let keyValueService: KeyValueDataService;
+
+        before(async () => {
+            keyValueService = new KeyValueDataService("test", new LocalStorageDriver(String, {
+                prefix: "test"
+            }));
+            await keyValueService.emitAsync('build');
+        });
+
+        it('should support saving string keys and values', async () => {
+            await keyValueService.setValue("abc", "123");
+            const value = await keyValueService.getValue("abc");
+            expect(value).to.equal("123");
+        });
+
+        
+        it('should not have a large overhead', async () => {
+            await keyValueService.setValue("someKey:registered", JSON.stringify([
+                "1", "2", "3"
+            ]));
+            await keyValueService.setValue("someKey:item:1", "Test1");
+            await keyValueService.setValue("someKey:item:2", "Test2");
+            await keyValueService.setValue("someKey:item:3", "Test3");
+        });
+
+    });
+
     describe('without compression', () => {
         let objectDataService: DataObjectService<DataObject>;
 
