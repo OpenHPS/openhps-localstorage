@@ -32,7 +32,7 @@
     "cover": "nyc mocha --config test/.mocharc.json && nyc report --reporter=cobertura",
     "lint": "eslint src/**",
     "clean": "shx rm -rf ./lib && shx rm -rf ./docs/out",
-    "build": "npm run clean && npm-run-all --parallel build:esm build:cjs build:declaration build:typedoc && npm run build:webpack",
+    "build": "npm run clean && npm-run-all --parallel build:esm build:cjs build:declarations build:typedoc && npm run build:webpack",
     "build:declarations": "tsc --declaration --emitDeclarationOnly --outdir lib/types",
     "build:esm": "tsc --module es2015 --outDir lib/esm",
     "build:cjs": "tsc --module commonjs  --outDir lib/cjs",
