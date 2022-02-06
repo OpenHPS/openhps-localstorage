@@ -9,6 +9,7 @@
         "preserveConstEnums": true,
         "sourceMap": true,
         "outDir": "./dist/cjs",
+        "skipLibCheck": true,
         "declaration": false,
         "emitDecoratorMetadata": true,
         "experimentalDecorators": true,
