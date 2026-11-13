@@ -1,4 +1,4 @@
-import { DataServiceDriver, FilterQuery, MemoryQueryEvaluator, FindOptions, DataSerializer } from '@openhps/core';
+import { DataServiceDriver, FilterQuery, MemoryQueryEvaluator, FindOptions, DataSerializerUtils } from '@openhps/core';
 import { compressToUTF16, decompressFromUTF16 } from 'lz-string';
 import { LocalStorageOptions } from './LocalStorageOptions';
 
@@ -11,7 +11,7 @@ export class LocalStorageDriver<I, T> extends DataServiceDriver<I, T> {
         super(dataType as unknown as new () => T, options);
         this.options.namespace = this.options.namespace || 'default';
         this.options.chunkSize = this.options.chunkSize || 10;
-        this.prefix = `${this.options.namespace}.${this.options.prefix || dataType.name}`.toLowerCase();
+        this.prefix = `${this.options.namespace}.${this.options.prefix || dataType?.name}`.toLowerCase();
 
         if (typeof localStorage === 'undefined' || localStorage === null) {
             // eslint-disable-next-line
@@ -24,7 +24,7 @@ export class LocalStorageDriver<I, T> extends DataServiceDriver<I, T> {
 
     private _initializeLocalStorage(): Promise<void> {
         return new Promise((resolve, reject) => {
-            const metaData = DataSerializer.findRootMetaInfo(this.dataType);
+            const metaData = DataSerializerUtils.getRootMetadata(this.dataType);
             if (!metaData) {
                 return resolve();
             }
@@ -51,7 +51,7 @@ export class LocalStorageDriver<I, T> extends DataServiceDriver<I, T> {
             const items: I[] = this._findAll();
             if (filter) {
                 let count = 0;
-                for (let i = 0; i <= items.length; i += this.options.chunkSize) {
+                for (let i = 0; i < items.length; i += this.options.chunkSize) {
                     const keys = items.slice(i, i + this.options.chunkSize);
                     keys.forEach((key) => {
                         const value = this._findByUID(key);
@@ -68,7 +68,11 @@ export class LocalStorageDriver<I, T> extends DataServiceDriver<I, T> {
     }
 
     private _findAll(): I[] {
-        return JSON.parse(localStorage.getItem(`${this.prefix}_keys`)) || [];
+        try {
+            return JSON.parse(localStorage.getItem(`${this.prefix}_keys`)) || [];
+        } catch {
+            return [];
+        }
     }
 
     private _findByUID(id: I): any {
@@ -76,7 +80,7 @@ export class LocalStorageDriver<I, T> extends DataServiceDriver<I, T> {
         const jsonStr = this.options.compress ? decompressFromUTF16(compressedStr) : compressedStr;
         try {
             return JSON.parse(jsonStr);
-        } catch (ex) {
+        } catch {
             return undefined;
         }
     }
@@ -85,10 +89,10 @@ export class LocalStorageDriver<I, T> extends DataServiceDriver<I, T> {
         return new Promise((resolve, reject) => {
             const serialized = this._findByUID(id);
             if (serialized) {
-                const obj = this.options.deserialize(this._findByUID(id));
+                const obj = this.options.deserialize(serialized);
                 resolve(obj);
             } else {
-                reject(`${this.dataType.name} with identifier #${id} not found!`);
+                reject(new Error(`${this.dataType.name} with identifier #${id} not found!`));
             }
         });
     }
@@ -113,19 +117,19 @@ export class LocalStorageDriver<I, T> extends DataServiceDriver<I, T> {
     findAll(query?: FilterQuery<T>, options: FindOptions = {}): Promise<T[]> {
         return new Promise<T[]>((resolve) => {
             const items: I[] = this._findAll();
-            options.limit = options.limit || items.length;
+            const limit = options.limit || items.length;
             let data: T[] = [];
-            for (let i = 0; i <= items.length; i += this.options.chunkSize) {
+            for (let i = 0; i < items.length && (options.sort || data.length < limit); i += this.options.chunkSize) {
                 const keys = items.slice(i, i + this.options.chunkSize);
-                keys.forEach((key) => {
+                for (const key of keys) {
+                    if (!options.sort && data.length >= limit) {
+                        break;
+                    }
                     const value = this._findByUID(key);
                     if (value && MemoryQueryEvaluator.evaluate(value, query)) {
                         data.push(value);
-                        if (!options.sort && data.length >= options.limit) {
-                            return;
-                        }
                     }
-                });
+                }
             }
             if (options.sort) {
                 data = data
@@ -144,7 +148,7 @@ export class LocalStorageDriver<I, T> extends DataServiceDriver<I, T> {
                             })
                             .reduce((a: number, b: number) => a + b),
                     )
-                    .slice(0, options.limit);
+                    .slice(0, limit);
             }
             data = data.map(this.options.deserialize);
             resolve(data);
@@ -168,7 +172,10 @@ export class LocalStorageDriver<I, T> extends DataServiceDriver<I, T> {
     delete(id: I): Promise<void> {
         return new Promise<void>((resolve) => {
             const items: I[] = this._findAll();
-            items.splice(items.indexOf(id), 1);
+            const index = items.indexOf(id);
+            if (index !== -1) {
+                items.splice(index, 1);
+            }
             localStorage.setItem(`${this.prefix}_keys`, JSON.stringify(items));
             localStorage.removeItem(`${this.prefix}.${id}`);
             resolve();
@@ -183,17 +190,20 @@ export class LocalStorageDriver<I, T> extends DataServiceDriver<I, T> {
                     .then(() => resolve())
                     .catch(reject);
             } else {
-                for (let i = 0; i <= items.length; i += this.options.chunkSize) {
+                const deletions: Array<Promise<void>> = [];
+                for (let i = 0; i < items.length; i += this.options.chunkSize) {
                     const keys = items.slice(i, i + this.options.chunkSize);
                     keys.forEach((key) => {
                         const value = this._findByUID(key);
                         if (MemoryQueryEvaluator.evaluate(value, filter)) {
-                            this.delete(key);
+                            deletions.push(this.delete(key));
                         }
                     });
                 }
+                Promise.all(deletions)
+                    .then(() => resolve())
+                    .catch(reject);
             }
-            resolve();
         });
     }
 }
